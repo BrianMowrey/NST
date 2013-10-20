@@ -485,12 +485,13 @@ function preg_quote(str, delimiter) {
         }
         break;
       }
+
       /// Matching functions
       if (!this.text && // class is not matched
           _functions.length) // not inside started definition block
             for (i in _functions) // match must be done against all definitions
               if ((m = _functions[i].exec(line)) && m[1]) { // if matched:
-        this.text = m[1].replace('this.', '');
+                this.text = m[1].replace('this.', '');
         if(lang == 'C++') this.text = m[1].replace(/^\*/, '');
         if (m[2]) { // default values will be removed:
           if (lang != 'CSS') m[2] = m[2].replace(/\s*=[^,)]*([,)])/g, '$1');
@@ -1265,9 +1266,11 @@ function preg_quote(str, delimiter) {
     this.js_parser = new LineParserJS('Perl',
                                  ['package name'],
                                  ['*\\bsub name',
-                                  '*\\bsub name()'],
+                                  '*\\bsub name()',
+                                  '*\\baround name => sub'],
                                  '[&a-zA-Z_][a-zA-Z0-9_\\:]*',
                                  []);
+    //fix method modifiers
 
     this.string_simplifier = new StringSimplifier({
       'START_QUOTES_RX_LIST' : [
@@ -1280,7 +1283,7 @@ function preg_quote(str, delimiter) {
           + '|substr|system|uc|ucfirst|unlink|warn'
           + ')\\s*)(<<((\\w+)))'
         ),
-        /(((['"`])))/, // simple quotes
+        ///(((['"`])))/, // simple quotes
         /((?:^|[~\{\(!]|(?:^|[^$%&@\w])[a-zA-Z_]\w*)\s*)((\/))/, // regex delimeter
         /(^|[^$@%&])\b((?:q[qxwr]?|m)([^qxwr{\[(<\w\s]))/, // q-quotes, match
         /(^|[^$@%&])\b((?:q[qxwr]?|m) (\w))/, // q-quotes, match with alphabetic delimeters
@@ -1365,8 +1368,23 @@ function preg_quote(str, delimiter) {
     });
 
     this.parse = function(line, index) {
+      var oldline = line;
+      var m = line.match(/(\w+) \"\w+\" => sub/)
+      if (m) {
+        self.modifier = m[1];
+        line = line.replace(/\"/g,"");
+
+       
+
+      }
+      else {
+        self.modifier = null;
+      }
+     
+
       line = self.string_simplifier.simplify(line);
       var result = self.js_parser.parse( line, index );
+
 
       self.zeroIdentation = false;
       self.index = self.js_parser.index;
@@ -1374,6 +1392,7 @@ function preg_quote(str, delimiter) {
       self.type = self.js_parser.type;
       self.open = self.js_parser.open;
       self.removeLast = self.js_parser.removeLast;
+
 
       if ( self.text != null ) {
         if ( self.type == TYPE_CLASS ) {
@@ -1383,6 +1402,10 @@ function preg_quote(str, delimiter) {
           if ( line.match(/sub\s+[\w:]+\s*(?:\([\s$@%;\\]*\)\s*)?;/) ) { // prototypes
             self.open = false;
             self.type = TYPE_PROTOTYPE
+          }
+          else if ( self.modifier ) {
+            self.type = TYPE_JQUERY_EXT;
+            self.text += ' (' + self.modifier + ')';
           }
           else if ( self.text.match(/^_/) ) { // convention from Perl Best Practices
             self.type = TYPE_PRIVATE;
